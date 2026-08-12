@@ -4,17 +4,15 @@
    ======================================== */
 
 /* ---- 服务器地址 ---- */
-const API_BASE = 'http://43.139.32.212:3210/api/uid';
-const WS_URL = 'ws://43.139.32.212:3210/ws';
+const API_BASE = '/api/uid';
+const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 
-/* ---- 分类映射 ---- */
-const CATEGORY_NAMES = {
-  'Chips': '薯片',
-  'Choco': '巧克力',
-  'Drinks': '饮料',
-  'Cookies': '饼干',
-  'Nuts': '坚果',
-};
+/* ---- 分类 ---- */
+let categories = [];
+async function loadCategories() {
+  const data = await api('/categories');
+  if (data) { categories = data; }
+}
 
 /* ---- 订单状态映射 ---- */
 const STATUS_NAMES = {
@@ -63,12 +61,14 @@ async function api(path, options = {}) {
 
 /* ---- 数据加载 ---- */
 async function loadData() {
-  const [prods, ords] = await Promise.all([
+  const [prods, ords, cats] = await Promise.all([
     api('/products'),
-    api('/orders')
+    api('/orders'),
+    api('/categories')
   ]);
   if (prods) products = prods;
   if (ords) orders = ords;
+  if (cats) { categories = cats; renderCategoryList(); }
 
   const activeTab = document.querySelector('.nav-item.active')?.dataset.tab || 'dashboard';
   if (activeTab === 'dashboard') renderDashboard();
@@ -266,7 +266,7 @@ function renderProductTable() {
             </div>
           </div>
         </td>
-        <td>${CATEGORY_NAMES[p.cat] || p.cat || '—'}</td>
+        <td>${p.cat || '—'}</td>
         <td class="cell-price">$${Number(p.price).toFixed(2)}</td>
         <td>
           <div class="stock-adjust">
@@ -337,7 +337,7 @@ function showProductForm() {
   document.getElementById('m-brand').value = '';
   document.getElementById('m-price').value = '';
   document.getElementById('m-stock').value = '';
-  document.getElementById('m-category').value = 'Chips';
+  renderCategoryOptions();
   document.getElementById('m-img-preview').style.display = 'none';
   document.getElementById('m-img-placeholder').style.display = 'flex';
   document.querySelectorAll('.color-opt').forEach(opt => {
@@ -358,7 +358,7 @@ function editProductForm(id) {
   document.getElementById('m-brand').value = product.brand || '';
   document.getElementById('m-price').value = product.price || '';
   document.getElementById('m-stock').value = product.stock !== undefined ? product.stock : '';
-  document.getElementById('m-category').value = product.cat || 'Chips';
+  renderCategoryOptions(product.cat);
 
   if (product.image) {
     const preview = document.getElementById('m-img-preview');
@@ -457,6 +457,74 @@ async function deleteProduct(id) {
     products = products.filter(p => p.id !== id);
     renderProductTable();
     showToast('商品已删除');
+  }
+}
+
+/* ========================================
+   分类管理
+   ======================================== */
+function catName(cat) {
+  return typeof cat === 'string' ? cat : (cat && (cat.name || cat.id)) || '';
+}
+
+/* 动态填充商品表单中的分类下拉框 */
+function renderCategoryOptions(selected) {
+  const select = document.getElementById('m-category');
+  const current = selected || select.value;
+  select.innerHTML = categories.map(cat => {
+    const name = catName(cat);
+    return `<option value="${name}">${name}</option>`;
+  }).join('');
+  if (current && [...select.options].some(o => o.value === current)) {
+    select.value = current;
+  } else if (categories.length > 0) {
+    select.value = catName(categories[0]);
+  }
+}
+
+/* 渲染分类管理列表 */
+function renderCategoryList() {
+  const list = document.getElementById('category-list');
+  if (!list) return;
+  if (categories.length === 0) {
+    list.innerHTML = '<div style="color:#999;font-size:13px;">暂无分类，请先添加</div>';
+    return;
+  }
+  list.innerHTML = categories.map(cat => {
+    const name = catName(cat);
+    const safe = String(name).replace(/'/g, "\\'");
+    return `
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:#f5f5f7;border-radius:999px;font-size:13px;font-weight:600;">
+        <span>${name}</span>
+        <button onclick="deleteCategory('${safe}')" title="删除分类" style="border:none;background:none;color:#c01a1a;cursor:pointer;font-size:15px;font-weight:700;line-height:1;padding:0;">×</button>
+      </div>
+    `;
+  }).join('');
+}
+
+async function addCategory() {
+  const input = document.getElementById('new-category-input');
+  const name = input.value.trim();
+  if (!name) { showToast('请输入分类名称'); return; }
+  const result = await api('/categories', {
+    method: 'POST',
+    body: JSON.stringify({ name })
+  });
+  if (result) {
+    input.value = '';
+    await loadCategories();
+    renderCategoryList();
+    showToast('分类已添加');
+  }
+}
+
+async function deleteCategory(name) {
+  if (!confirm(`确认删除分类"${name}"？`)) return;
+  const result = await api('/categories/' + encodeURIComponent(name), { method: 'DELETE' });
+  if (result) {
+    await loadCategories();
+    renderCategoryList();
+    showToast('分类已删除');
   }
 }
 
@@ -635,7 +703,47 @@ orderModal.addEventListener('click', function(e) {
 });
 
 /* ========================================
+   登录
+   ======================================== */
+const AUTH_KEY = 'uid_admin_token';
+
+function checkAuth() {
+  const token = localStorage.getItem(AUTH_KEY);
+  if (!token) {
+    document.getElementById('login-overlay').style.display = 'flex';
+    return false;
+  }
+  document.getElementById('login-overlay').style.display = 'none';
+  return true;
+}
+
+document.getElementById('login-btn').addEventListener('click', async function() {
+  const username = document.getElementById('login-user').value.trim();
+  const password = document.getElementById('login-pass').value.trim();
+  if (!username || !password) return;
+  const result = await api('/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+  if (result && result.success) {
+    localStorage.setItem(AUTH_KEY, result.token);
+    document.getElementById('login-overlay').style.display = 'none';
+    document.getElementById('login-error').style.display = 'none';
+    loadData();
+    connectWS();
+  } else {
+    document.getElementById('login-error').style.display = 'block';
+  }
+});
+
+document.getElementById('login-pass').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') document.getElementById('login-btn').click();
+});
+document.getElementById('login-user').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') document.getElementById('login-pass').focus();
+});
+
+/* ========================================
    初始化
    ======================================== */
-loadData();
-connectWS();
+if (checkAuth()) {
+  loadData();
+  connectWS();
+}

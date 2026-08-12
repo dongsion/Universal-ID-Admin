@@ -8,6 +8,20 @@
 </head>
 <body>
 
+<!-- 登录遮罩层 -->
+<div id="login-overlay" style="position:fixed;inset:0;background:#1a1a2e;display:flex;align-items:center;justify-content:center;z-index:9999;">
+  <div style="width:320px;padding:40px 30px;background:#16213e;border-radius:16px;">
+    <div style="text-align:center;margin-bottom:30px">
+      <div style="font-size:22px;font-weight:800;color:#fff;margin-bottom:6px">Universal ID</div>
+      <div style="font-size:13px;color:#888">商家管理后台</div>
+    </div>
+    <input id="login-user" type="text" placeholder="账号" style="width:100%;padding:12px 16px;background:#0f3460;border:1px solid #233;border-radius:10px;color:#fff;font-size:14px;margin-bottom:12px;box-sizing:border-box;border:1px solid #333">
+    <input id="login-pass" type="password" placeholder="密码" style="width:100%;padding:12px 16px;background:#0f3460;border:1px solid #233;border-radius:10px;color:#fff;font-size:14px;margin-bottom:20px;box-sizing:border-box;border:1px solid #333">
+    <button id="login-btn" style="width:100%;padding:13px;background:#FFD60A;color:#000;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">登 录</button>
+    <div id="login-error" style="color:#ff6b6b;font-size:12px;text-align:center;margin-top:12px;display:none">用户名或密码错误</div>
+  </div>
+</div>
+
 <div id="merchant-app">
   <!-- 侧边栏 -->
   <aside class="sidebar">
@@ -31,7 +45,7 @@
       </button>
     </nav>
     <div class="sidebar-footer">
-      <a href="https://dongsion.github.io/Universal-ID/" class="view-store" target="_blank">查看店铺 →</a>
+      <a href="/" class="view-store">查看店铺 →</a>
     </div>
   </aside>
 
@@ -97,6 +111,21 @@
           </tbody>
         </table>
       </div>
+
+      <!-- 分类管理 -->
+      <div style="margin-top:24px;background:#fff;border-radius:16px;border:1px solid #eee;padding:24px;">
+        <div class="panel-header">
+          <h2>分类管理</h2>
+          <span class="panel-sub">添加或删除商品分类</span>
+        </div>
+        <div style="display:flex;gap:12px;margin-bottom:20px;">
+          <input id="new-category-input" type="text" placeholder="输入分类名称" maxlength="20" style="flex:1;padding:12px 16px;border:1.5px solid #e0e0e6;border-radius:12px;font-size:15px;color:#1a1a1a;outline:none;font-family:inherit;">
+          <button class="btn-primary" onclick="addCategory()">添加分类</button>
+        </div>
+        <div id="category-list" style="display:flex;flex-wrap:wrap;gap:10px;">
+          <!-- JS 注入 -->
+        </div>
+      </div>
     </section>
 
     <!-- ====== 订单管理 ====== -->
@@ -157,11 +186,7 @@
         <div class="form-group">
           <label>分类</label>
           <select id="m-category">
-            <option value="Chips">薯片</option>
-            <option value="Choco">巧克力</option>
-            <option value="Drinks">饮料</option>
-            <option value="Cookies">饼干</option>
-            <option value="Nuts">坚果</option>
+            <!-- JS 动态填充 -->
           </select>
         </div>
         <div class="form-group">
