@@ -1,6 +1,11 @@
 /* ========================================
    Universal ID - 商家后台
+   后端版：API + WebSocket 实时同步
    ======================================== */
+
+/* ---- 服务器地址 ---- */
+const API_BASE = 'http://43.139.32.212:3210/api/uid';
+const WS_URL = 'ws://43.139.32.212:3210/ws';
 
 /* ---- 分类映射 ---- */
 const CATEGORY_NAMES = {
@@ -17,10 +22,6 @@ const STATUS_NAMES = {
   'completed': '已完成',
   'cancelled': '已取消',
 };
-
-/* ---- 共享数据键（与客户端相同）---- */
-const STORAGE_KEY = 'universal_id_products';
-const ORDERS_KEY = 'universal_id_orders';
 
 /* ---- 状态 ---- */
 let products = [];
@@ -41,20 +42,99 @@ const productModal = document.getElementById('product-modal');
 const orderModal = document.getElementById('order-modal');
 const toast = document.getElementById('m-toast');
 
+/* ---- API 请求封装 ---- */
+async function api(path, options = {}) {
+  try {
+    const res = await fetch(API_BASE + path, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || '请求失败');
+    }
+    return await res.json();
+  } catch (e) {
+    console.error('API错误:', e);
+    showToast('网络错误');
+    return null;
+  }
+}
+
 /* ---- 数据加载 ---- */
-function loadData() {
-  const sp = localStorage.getItem(STORAGE_KEY);
-  products = sp ? JSON.parse(sp) : [];
-  const so = localStorage.getItem(ORDERS_KEY);
-  orders = so ? JSON.parse(so) : [];
+async function loadData() {
+  const [prods, ords] = await Promise.all([
+    api('/products'),
+    api('/orders')
+  ]);
+  if (prods) products = prods;
+  if (ords) orders = ords;
+
+  const activeTab = document.querySelector('.nav-item.active')?.dataset.tab || 'dashboard';
+  if (activeTab === 'dashboard') renderDashboard();
+  if (activeTab === 'products') renderProductTable();
+  if (activeTab === 'orders') renderOrders();
 }
 
-function saveProducts() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+/* ---- WebSocket 实时更新 ---- */
+let ws = null;
+function connectWS() {
+  try {
+    ws = new WebSocket(WS_URL);
+
+    ws.onopen = () => console.log('商家端 WebSocket 已连接');
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      handleWSMessage(msg);
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket 断开，5秒后重连');
+      setTimeout(connectWS, 5000);
+    };
+
+    ws.onerror = () => ws.close();
+  } catch (e) {
+    console.error('WebSocket 连接失败:', e);
+  }
 }
 
-function saveOrders() {
-  localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
+function handleWSMessage(msg) {
+  const { type, data } = msg;
+
+  if (type === 'product_updated') {
+    const idx = products.findIndex(p => p.id === data.id);
+    if (idx >= 0) products[idx] = data;
+    else products.push(data);
+    const activeTab = document.querySelector('.nav-item.active')?.dataset.tab;
+    if (activeTab === 'dashboard') renderDashboard();
+    if (activeTab === 'products') renderProductTable();
+  } else if (type === 'product_added') {
+    products.push(data);
+    const activeTab = document.querySelector('.nav-item.active')?.dataset.tab;
+    if (activeTab === 'dashboard') renderDashboard();
+    if (activeTab === 'products') renderProductTable();
+  } else if (type === 'product_deleted') {
+    products = products.filter(p => p.id !== data.id);
+    const activeTab = document.querySelector('.nav-item.active')?.dataset.tab;
+    if (activeTab === 'dashboard') renderDashboard();
+    if (activeTab === 'products') renderProductTable();
+  } else if (type === 'order_new') {
+    orders.unshift(data);
+    showToast(`新订单！${data.id} - $${data.total.toFixed(0)}`);
+    const activeTab = document.querySelector('.nav-item.active')?.dataset.tab;
+    if (activeTab === 'dashboard') renderDashboard();
+    if (activeTab === 'orders') renderOrders();
+    updateOrderBadge();
+  } else if (type === 'order_updated') {
+    const idx = orders.findIndex(o => o.id === data.id);
+    if (idx >= 0) orders[idx] = data;
+    const activeTab = document.querySelector('.nav-item.active')?.dataset.tab;
+    if (activeTab === 'dashboard') renderDashboard();
+    if (activeTab === 'orders') renderOrders();
+    updateOrderBadge();
+  }
 }
 
 /* ========================================
@@ -86,40 +166,31 @@ function renderDashboard() {
 
   statsGrid.innerHTML = `
     <div class="stat-card">
-      <div class="stat-card-header">
-        <div class="stat-icon purple">📦</div>
-      </div>
+      <div class="stat-card-header"><div class="stat-icon purple">📦</div></div>
       <div class="stat-label">商品总数</div>
       <div class="stat-value">${totalProducts}</div>
       <div class="stat-trend">总库存 ${totalStock} 件</div>
     </div>
     <div class="stat-card">
-      <div class="stat-card-header">
-        <div class="stat-icon yellow">💰</div>
-      </div>
+      <div class="stat-card-header"><div class="stat-icon yellow">💰</div></div>
       <div class="stat-label">库存价值</div>
       <div class="stat-value">$${stockValue.toFixed(0)}</div>
       <div class="stat-trend">库存总金额</div>
     </div>
     <div class="stat-card">
-      <div class="stat-card-header">
-        <div class="stat-icon green">🛒</div>
-      </div>
+      <div class="stat-card-header"><div class="stat-icon green">🛒</div></div>
       <div class="stat-label">订单总数</div>
       <div class="stat-value">${orders.length}</div>
       <div class="stat-trend">${pendingOrders} 笔待处理</div>
     </div>
     <div class="stat-card">
-      <div class="stat-card-header">
-        <div class="stat-icon red">📈</div>
-      </div>
+      <div class="stat-card-header"><div class="stat-icon red">📈</div></div>
       <div class="stat-label">营业收入</div>
       <div class="stat-value">$${totalRevenue.toFixed(0)}</div>
       <div class="stat-trend">已完成订单收入</div>
     </div>
   `;
 
-  /* 低库存列表 */
   const lowStock = products.filter(p => p.stock <= 10).sort((a, b) => a.stock - b.stock);
   if (lowStock.length === 0) {
     lowStockList.innerHTML = '<div class="empty"><div class="empty-text">库存充足</div></div>';
@@ -140,8 +211,7 @@ function renderDashboard() {
     `).join('');
   }
 
-  /* 最近订单 */
-  const recent = [...orders].reverse().slice(0, 5);
+  const recent = orders.slice(0, 5);
   if (recent.length === 0) {
     recentOrdersList.innerHTML = '<div class="empty"><div class="empty-text">暂无订单</div></div>';
   } else {
@@ -149,7 +219,7 @@ function renderDashboard() {
       <div class="order-item" onclick="openOrderModal('${o.id}')">
         <div>
           <div class="order-item-id">${o.id}</div>
-          <div class="order-item-time">${formatDate(o.timestamp)}</div>
+          <div class="order-item-time">${formatDate(o.created_at)}</div>
         </div>
         <span class="order-status ${o.status}">${STATUS_NAMES[o.status] || o.status}</span>
         <div class="order-item-total">$${o.total.toFixed(0)}</div>
@@ -157,7 +227,6 @@ function renderDashboard() {
     `).join('');
   }
 
-  /* 更新订单徽章 */
   updateOrderBadge();
 }
 
@@ -198,7 +267,7 @@ function renderProductTable() {
           </div>
         </td>
         <td>${CATEGORY_NAMES[p.cat] || p.cat || '—'}</td>
-        <td class="cell-price">$${p.price.toFixed(2)}</td>
+        <td class="cell-price">$${Number(p.price).toFixed(2)}</td>
         <td>
           <div class="stock-adjust">
             <button onclick="adjustStock(${p.id}, -1)">−</button>
@@ -227,28 +296,36 @@ function renderProductTable() {
   }).join('');
 }
 
-/* 快速调整库存 */
-function adjustStock(id, delta) {
+async function adjustStock(id, delta) {
   const product = products.find(p => p.id === id);
   if (!product) return;
-  product.stock = Math.max(0, product.stock + delta);
-  saveProducts();
-  renderProductTable();
-  if (delta > 0) showToast(`${product.name} +1`);
+  const result = await api(`/products/${id}/stock`, {
+    method: 'PATCH',
+    body: JSON.stringify({ stock: delta })
+  });
+  if (result) {
+    product.stock = result.stock;
+    renderProductTable();
+    if (delta > 0) showToast(`${product.name} ${delta > 0 ? '+' : ''}${delta}`);
+  }
 }
 
-/* 一键补货 */
-function restockProduct(id) {
+async function restockProduct(id) {
   const product = products.find(p => p.id === id);
   if (!product) return;
-  product.stock += 10;
-  saveProducts();
-  renderDashboard();
-  showToast(`${product.name} 补货 +10`);
+  const result = await api(`/products/${id}/stock`, {
+    method: 'PATCH',
+    body: JSON.stringify({ stock: 10 })
+  });
+  if (result) {
+    product.stock = result.stock;
+    renderDashboard();
+    showToast(`${product.name} 补货 +10`);
+  }
 }
 
 /* ========================================
-   商品表单（添加/编辑）
+   商品表单
    ======================================== */
 function showProductForm() {
   editingId = null;
@@ -304,14 +381,10 @@ function closeProductForm() {
   productModal.classList.remove('active');
 }
 
-/* 图片上传 */
 document.getElementById('m-image').addEventListener('change', function(e) {
   const file = e.target.files[0];
   if (!file) return;
-  if (file.size > 2 * 1024 * 1024) {
-    showToast('图片过大（最大 2MB）');
-    return;
-  }
+  if (file.size > 2 * 1024 * 1024) { showToast('图片过大（最大 2MB）'); return; }
   const reader = new FileReader();
   reader.onload = function(event) {
     uploadedImage = event.target.result;
@@ -323,7 +396,6 @@ document.getElementById('m-image').addEventListener('change', function(e) {
   reader.readAsDataURL(file);
 });
 
-/* 颜色选择 */
 document.getElementById('m-color-picker').addEventListener('click', function(e) {
   const opt = e.target.closest('.color-opt');
   if (!opt) return;
@@ -332,8 +404,7 @@ document.getElementById('m-color-picker').addEventListener('click', function(e) 
   selectedColor = opt.dataset.color;
 });
 
-/* 保存商品 */
-function saveProductForm() {
+async function saveProductForm() {
   const name = document.getElementById('m-name').value.trim();
   const brand = document.getElementById('m-brand').value.trim();
   const price = parseFloat(document.getElementById('m-price').value);
@@ -343,47 +414,50 @@ function saveProductForm() {
   if (!name) { showToast('请输入商品名称'); return; }
   if (isNaN(price) || price < 0) { showToast('请输入有效价格'); return; }
 
+  const payload = {
+    name, brand, price, stock, cat: category, bg: selectedColor,
+    image: uploadedImage,
+    bagBg: uploadedImage ? null : generateBagColor(category),
+    bagText: uploadedImage ? null : (brand || name).toUpperCase().substring(0, 10),
+    bagSub: uploadedImage ? null : category,
+  };
+
   if (editingId !== null) {
-    const product = products.find(p => p.id === editingId);
-    if (product) {
-      Object.assign(product, {
-        name, brand, price, stock, cat: category, bg: selectedColor,
-        image: uploadedImage !== null ? uploadedImage : product.image,
-      });
-      if (!uploadedImage && !product.bagBg) {
-        product.bagBg = generateBagColor(category);
-        product.bagText = (brand || name).toUpperCase().substring(0, 10);
-        product.bagSub = category;
-      }
+    const updated = await api(`/products/${editingId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+    if (updated) {
+      const idx = products.findIndex(p => p.id === editingId);
+      if (idx >= 0) products[idx] = updated;
       showToast('商品已更新');
     }
   } else {
-    const newProduct = {
-      id: products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1,
-      name, brand, price, stock, cat: category, bg: selectedColor,
-      image: uploadedImage,
-      bagBg: uploadedImage ? null : generateBagColor(category),
-      bagText: uploadedImage ? null : (brand || name).toUpperCase().substring(0, 10),
-      bagSub: uploadedImage ? null : category,
-    };
-    products.push(newProduct);
-    showToast('商品已添加');
+    const newProduct = await api('/products', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    if (newProduct) {
+      products.push(newProduct);
+      showToast('商品已添加');
+    }
   }
 
-  saveProducts();
   renderProductTable();
   closeProductForm();
 }
 
-/* 删除商品 */
-function deleteProduct(id) {
+async function deleteProduct(id) {
   const product = products.find(p => p.id === id);
   if (!product) return;
   if (!confirm(`确认删除"${product.name}"？`)) return;
-  products = products.filter(p => p.id !== id);
-  saveProducts();
-  renderProductTable();
-  showToast('商品已删除');
+
+  const result = await api(`/products/${id}`, { method: 'DELETE' });
+  if (result) {
+    products = products.filter(p => p.id !== id);
+    renderProductTable();
+    showToast('商品已删除');
+  }
 }
 
 /* ========================================
@@ -391,9 +465,7 @@ function deleteProduct(id) {
    ======================================== */
 function renderOrders() {
   updateOrderBadge();
-  const filtered = orderFilter === 'all'
-    ? orders
-    : orders.filter(o => o.status === orderFilter);
+  const filtered = orderFilter === 'all' ? orders : orders.filter(o => o.status === orderFilter);
 
   if (filtered.length === 0) {
     const filterText = orderFilter === 'all' ? '' : STATUS_NAMES[orderFilter] || orderFilter;
@@ -407,17 +479,17 @@ function renderOrders() {
     return;
   }
 
-  orderList.innerHTML = [...filtered].reverse().map(o => `
+  orderList.innerHTML = filtered.map(o => `
     <div class="order-card" onclick="openOrderModal('${o.id}')">
       <div class="order-card-top">
         <div>
           <div class="order-card-id">${o.id}</div>
-          <div class="order-card-time">${formatDate(o.timestamp)}</div>
+          <div class="order-card-time">${formatDate(o.created_at)}</div>
         </div>
         <span class="order-status ${o.status}">${STATUS_NAMES[o.status] || o.status}</span>
       </div>
       <div class="order-card-items">
-        ${o.items.map(i => `
+        ${(o.items || []).map(i => `
           <div class="order-card-item">
             ${i.name}
             <span class="order-card-item-qty">x${i.qty}</span>
@@ -425,7 +497,7 @@ function renderOrders() {
         `).join('')}
       </div>
       <div class="order-card-bottom">
-        <div class="order-card-total">$${o.total.toFixed(2)}</div>
+        <div class="order-card-total">$${Number(o.total).toFixed(2)}</div>
         <div class="order-card-actions">
           ${o.status === 'pending' ? `
             <button class="btn-primary" onclick="event.stopPropagation(); updateOrderStatus('${o.id}', 'completed')">完成</button>
@@ -437,7 +509,6 @@ function renderOrders() {
   `).join('');
 }
 
-/* 订单筛选 */
 document.querySelectorAll('.filter-tab').forEach(tab => {
   tab.addEventListener('click', function() {
     document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
@@ -447,7 +518,6 @@ document.querySelectorAll('.filter-tab').forEach(tab => {
   });
 });
 
-/* 打开订单详情 */
 function openOrderModal(orderId) {
   const order = orders.find(o => o.id === orderId);
   if (!order) return;
@@ -456,11 +526,11 @@ function openOrderModal(orderId) {
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <div>
         <div style="font-size:15px;font-weight:700">${order.id}</div>
-        <div style="font-size:12px;color:#999">${formatDate(order.timestamp)}</div>
+        <div style="font-size:12px;color:#999">${formatDate(order.created_at)}</div>
       </div>
       <span class="order-status ${order.status}">${STATUS_NAMES[order.status] || order.status}</span>
     </div>
-    ${order.items.map(i => `
+    ${(order.items || []).map(i => `
       <div class="order-detail-row">
         <div>
           <div class="order-detail-name">${i.name}</div>
@@ -472,7 +542,7 @@ function openOrderModal(orderId) {
     <div class="order-detail-summary">
       <div class="order-detail-total-row">
         <span class="order-detail-total-label">合计</span>
-        <span class="order-detail-total-value">$${order.total.toFixed(2)}</span>
+        <span class="order-detail-total-value">$${Number(order.total).toFixed(2)}</span>
       </div>
     </div>
   `;
@@ -486,7 +556,7 @@ function openOrderModal(orderId) {
   } else {
     footer.innerHTML = `
       <button class="btn-secondary" onclick="closeOrderModal()">关闭</button>
-      ${order.status !== 'pending' ? `<button class="btn-primary" onclick="updateOrderStatus('${order.id}', 'pending')">重新打开</button>` : ''}
+      <button class="btn-primary" onclick="updateOrderStatus('${order.id}', 'pending')">重新打开</button>
     `;
   }
 
@@ -497,18 +567,20 @@ function closeOrderModal() {
   orderModal.classList.remove('active');
 }
 
-/* 更新订单状态 */
-function updateOrderStatus(orderId, status) {
-  const order = orders.find(o => o.id === orderId);
-  if (!order) return;
-  order.status = status;
-  saveOrders();
-  renderOrders();
-  closeOrderModal();
-  showToast(`订单已${STATUS_NAMES[status] || status}`);
+async function updateOrderStatus(orderId, status) {
+  const result = await api(`/orders/${orderId}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status })
+  });
+  if (result) {
+    const idx = orders.findIndex(o => o.id === orderId);
+    if (idx >= 0) orders[idx] = result;
+    renderOrders();
+    closeOrderModal();
+    showToast(`订单已${STATUS_NAMES[status] || status}`);
+  }
 }
 
-/* 更新订单徽章 */
 function updateOrderBadge() {
   const pending = orders.filter(o => o.status === 'pending').length;
   if (pending > 0) {
@@ -537,9 +609,10 @@ function generateBagColor(category) {
 }
 
 function formatDate(iso) {
-  const d = new Date(iso);
+  const d = new Date(iso + (iso.endsWith('Z') ? '' : 'Z'));
   const now = new Date();
   const diff = (now - d) / 1000;
+  if (diff < 0) return '刚刚';
   if (diff < 60) return '刚刚';
   if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
   if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
@@ -554,7 +627,6 @@ function showToast(msg) {
   toastTimer = setTimeout(() => toast.classList.remove('show'), 2000);
 }
 
-/* 关闭弹窗：点击遮罩 */
 productModal.addEventListener('click', function(e) {
   if (e.target === this) closeProductForm();
 });
@@ -566,13 +638,4 @@ orderModal.addEventListener('click', function(e) {
    初始化
    ======================================== */
 loadData();
-renderDashboard();
-
-/* 每5秒刷新数据（模拟实时同步） */
-setInterval(() => {
-  loadData();
-  const activeTab = document.querySelector('.nav-item.active').dataset.tab;
-  if (activeTab === 'dashboard') renderDashboard();
-  if (activeTab === 'products') renderProductTable();
-  if (activeTab === 'orders') renderOrders();
-}, 5000);
+connectWS();
