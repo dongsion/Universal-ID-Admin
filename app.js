@@ -1,6 +1,22 @@
 /* ========================================
-   Universal ID - Merchant Dashboard
+   Universal ID - 商家后台
    ======================================== */
+
+/* ---- 分类映射 ---- */
+const CATEGORY_NAMES = {
+  'Chips': '薯片',
+  'Choco': '巧克力',
+  'Drinks': '饮料',
+  'Cookies': '饼干',
+  'Nuts': '坚果',
+};
+
+/* ---- 订单状态映射 ---- */
+const STATUS_NAMES = {
+  'pending': '待处理',
+  'completed': '已完成',
+  'cancelled': '已取消',
+};
 
 /* ---- 共享数据键（与客户端相同）---- */
 const STORAGE_KEY = 'universal_id_products';
@@ -59,7 +75,7 @@ document.querySelectorAll('.nav-item').forEach(item => {
 });
 
 /* ========================================
-   Dashboard 仪表盘
+   仪表盘
    ======================================== */
 function renderDashboard() {
   const totalProducts = products.length;
@@ -73,40 +89,40 @@ function renderDashboard() {
       <div class="stat-card-header">
         <div class="stat-icon purple">📦</div>
       </div>
-      <div class="stat-label">Total Products</div>
+      <div class="stat-label">商品总数</div>
       <div class="stat-value">${totalProducts}</div>
-      <div class="stat-trend">${totalStock} units in stock</div>
+      <div class="stat-trend">总库存 ${totalStock} 件</div>
     </div>
     <div class="stat-card">
       <div class="stat-card-header">
         <div class="stat-icon yellow">💰</div>
       </div>
-      <div class="stat-label">Stock Value</div>
+      <div class="stat-label">库存价值</div>
       <div class="stat-value">$${stockValue.toFixed(0)}</div>
-      <div class="stat-trend">Total inventory worth</div>
+      <div class="stat-trend">库存总金额</div>
     </div>
     <div class="stat-card">
       <div class="stat-card-header">
         <div class="stat-icon green">🛒</div>
       </div>
-      <div class="stat-label">Total Orders</div>
+      <div class="stat-label">订单总数</div>
       <div class="stat-value">${orders.length}</div>
-      <div class="stat-trend">${pendingOrders} pending</div>
+      <div class="stat-trend">${pendingOrders} 笔待处理</div>
     </div>
     <div class="stat-card">
       <div class="stat-card-header">
         <div class="stat-icon red">📈</div>
       </div>
-      <div class="stat-label">Revenue</div>
+      <div class="stat-label">营业收入</div>
       <div class="stat-value">$${totalRevenue.toFixed(0)}</div>
-      <div class="stat-trend">From completed orders</div>
+      <div class="stat-trend">已完成订单收入</div>
     </div>
   `;
 
   /* 低库存列表 */
   const lowStock = products.filter(p => p.stock <= 10).sort((a, b) => a.stock - b.stock);
   if (lowStock.length === 0) {
-    lowStockList.innerHTML = '<div class="empty"><div class="empty-text">All products well stocked</div></div>';
+    lowStockList.innerHTML = '<div class="empty"><div class="empty-text">库存充足</div></div>';
   } else {
     lowStockList.innerHTML = lowStock.map(p => `
       <div class="stock-item">
@@ -116,10 +132,10 @@ function renderDashboard() {
         <div class="stock-item-info">
           <div class="stock-item-name">${p.name}</div>
           <div class="stock-item-stock ${p.stock <= 0 ? 'warn' : ''}">
-            ${p.stock <= 0 ? 'Out of stock' : `${p.stock} left`}
+            ${p.stock <= 0 ? '已售罄' : `剩余 ${p.stock}`}
           </div>
         </div>
-        <button class="stock-restock-btn" onclick="restockProduct(${p.id})">Restock +10</button>
+        <button class="stock-restock-btn" onclick="restockProduct(${p.id})">补货 +10</button>
       </div>
     `).join('');
   }
@@ -127,7 +143,7 @@ function renderDashboard() {
   /* 最近订单 */
   const recent = [...orders].reverse().slice(0, 5);
   if (recent.length === 0) {
-    recentOrdersList.innerHTML = '<div class="empty"><div class="empty-text">No orders yet</div></div>';
+    recentOrdersList.innerHTML = '<div class="empty"><div class="empty-text">暂无订单</div></div>';
   } else {
     recentOrdersList.innerHTML = recent.map(o => `
       <div class="order-item" onclick="openOrderModal('${o.id}')">
@@ -135,7 +151,7 @@ function renderDashboard() {
           <div class="order-item-id">${o.id}</div>
           <div class="order-item-time">${formatDate(o.timestamp)}</div>
         </div>
-        <span class="order-status ${o.status}">${o.status}</span>
+        <span class="order-status ${o.status}">${STATUS_NAMES[o.status] || o.status}</span>
         <div class="order-item-total">$${o.total.toFixed(0)}</div>
       </div>
     `).join('');
@@ -154,8 +170,8 @@ function renderProductTable() {
       <tr><td colspan="6">
         <div class="empty">
           <div class="empty-icon">📦</div>
-          <div class="empty-text">No products yet</div>
-          <div class="empty-sub">Click "Add Product" to create one</div>
+          <div class="empty-text">暂无商品</div>
+          <div class="empty-sub">点击"添加商品"创建第一个</div>
         </div>
       </td></tr>
     `;
@@ -166,7 +182,7 @@ function renderProductTable() {
     const soldOut = p.stock <= 0;
     const lowStock = p.stock > 0 && p.stock <= 10;
     const statusClass = soldOut ? 'out-stock' : lowStock ? 'low-stock' : 'in-stock';
-    const statusText = soldOut ? 'Out of Stock' : lowStock ? 'Low Stock' : 'In Stock';
+    const statusText = soldOut ? '已售罄' : lowStock ? '库存不足' : '有货';
 
     return `
       <tr>
@@ -181,7 +197,7 @@ function renderProductTable() {
             </div>
           </div>
         </td>
-        <td>${p.cat || '—'}</td>
+        <td>${CATEGORY_NAMES[p.cat] || p.cat || '—'}</td>
         <td class="cell-price">$${p.price.toFixed(2)}</td>
         <td>
           <div class="stock-adjust">
@@ -198,10 +214,10 @@ function renderProductTable() {
         </td>
         <td>
           <div class="cell-actions">
-            <button class="action-btn edit" onclick="editProductForm(${p.id})" title="Edit">
+            <button class="action-btn edit" onclick="editProductForm(${p.id})" title="编辑">
               <svg width="14" height="14" viewBox="0 0 14 14"><path d="M10 2l2 2-7 7H3V9l7-7z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/></svg>
             </button>
-            <button class="action-btn delete" onclick="deleteProduct(${p.id})" title="Delete">
+            <button class="action-btn delete" onclick="deleteProduct(${p.id})" title="删除">
               <svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 4h8M5 4V2h4v2M4 4l1 8h4l1-8" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
           </div>
@@ -218,7 +234,7 @@ function adjustStock(id, delta) {
   product.stock = Math.max(0, product.stock + delta);
   saveProducts();
   renderProductTable();
-  if (delta > 0) showToast(`+1 stock for ${product.name}`);
+  if (delta > 0) showToast(`${product.name} +1`);
 }
 
 /* 一键补货 */
@@ -228,7 +244,7 @@ function restockProduct(id) {
   product.stock += 10;
   saveProducts();
   renderDashboard();
-  showToast(`Restocked ${product.name} +10`);
+  showToast(`${product.name} 补货 +10`);
 }
 
 /* ========================================
@@ -238,8 +254,8 @@ function showProductForm() {
   editingId = null;
   uploadedImage = null;
   selectedColor = '#FFF3D6';
-  document.getElementById('modal-title').textContent = 'Add Product';
-  document.getElementById('m-save-btn').textContent = 'Save Product';
+  document.getElementById('modal-title').textContent = '添加商品';
+  document.getElementById('m-save-btn').textContent = '保存商品';
   document.getElementById('m-name').value = '';
   document.getElementById('m-brand').value = '';
   document.getElementById('m-price').value = '';
@@ -259,8 +275,8 @@ function editProductForm(id) {
   editingId = id;
   uploadedImage = product.image || null;
   selectedColor = product.bg || '#FFF3D6';
-  document.getElementById('modal-title').textContent = 'Edit Product';
-  document.getElementById('m-save-btn').textContent = 'Update Product';
+  document.getElementById('modal-title').textContent = '编辑商品';
+  document.getElementById('m-save-btn').textContent = '更新商品';
   document.getElementById('m-name').value = product.name || '';
   document.getElementById('m-brand').value = product.brand || '';
   document.getElementById('m-price').value = product.price || '';
@@ -293,7 +309,7 @@ document.getElementById('m-image').addEventListener('change', function(e) {
   const file = e.target.files[0];
   if (!file) return;
   if (file.size > 2 * 1024 * 1024) {
-    showToast('Image too large (max 2MB)');
+    showToast('图片过大（最大 2MB）');
     return;
   }
   const reader = new FileReader();
@@ -324,8 +340,8 @@ function saveProductForm() {
   const stock = parseInt(document.getElementById('m-stock').value) || 0;
   const category = document.getElementById('m-category').value;
 
-  if (!name) { showToast('Please enter product name'); return; }
-  if (isNaN(price) || price < 0) { showToast('Please enter valid price'); return; }
+  if (!name) { showToast('请输入商品名称'); return; }
+  if (isNaN(price) || price < 0) { showToast('请输入有效价格'); return; }
 
   if (editingId !== null) {
     const product = products.find(p => p.id === editingId);
@@ -339,7 +355,7 @@ function saveProductForm() {
         product.bagText = (brand || name).toUpperCase().substring(0, 10);
         product.bagSub = category;
       }
-      showToast('Product updated');
+      showToast('商品已更新');
     }
   } else {
     const newProduct = {
@@ -351,7 +367,7 @@ function saveProductForm() {
       bagSub: uploadedImage ? null : category,
     };
     products.push(newProduct);
-    showToast('Product added');
+    showToast('商品已添加');
   }
 
   saveProducts();
@@ -363,11 +379,11 @@ function saveProductForm() {
 function deleteProduct(id) {
   const product = products.find(p => p.id === id);
   if (!product) return;
-  if (!confirm(`Delete "${product.name}"?`)) return;
+  if (!confirm(`确认删除"${product.name}"？`)) return;
   products = products.filter(p => p.id !== id);
   saveProducts();
   renderProductTable();
-  showToast('Product deleted');
+  showToast('商品已删除');
 }
 
 /* ========================================
@@ -380,11 +396,12 @@ function renderOrders() {
     : orders.filter(o => o.status === orderFilter);
 
   if (filtered.length === 0) {
+    const filterText = orderFilter === 'all' ? '' : STATUS_NAMES[orderFilter] || orderFilter;
     orderList.innerHTML = `
       <div class="empty">
         <div class="empty-icon">🛒</div>
-        <div class="empty-text">No ${orderFilter === 'all' ? '' : orderFilter} orders</div>
-        <div class="empty-sub">Orders from the customer app will appear here</div>
+        <div class="empty-text">暂无${filterText}订单</div>
+        <div class="empty-sub">客户端的订单会自动同步到这里</div>
       </div>
     `;
     return;
@@ -397,7 +414,7 @@ function renderOrders() {
           <div class="order-card-id">${o.id}</div>
           <div class="order-card-time">${formatDate(o.timestamp)}</div>
         </div>
-        <span class="order-status ${o.status}">${o.status}</span>
+        <span class="order-status ${o.status}">${STATUS_NAMES[o.status] || o.status}</span>
       </div>
       <div class="order-card-items">
         ${o.items.map(i => `
@@ -411,8 +428,8 @@ function renderOrders() {
         <div class="order-card-total">$${o.total.toFixed(2)}</div>
         <div class="order-card-actions">
           ${o.status === 'pending' ? `
-            <button class="btn-primary" onclick="event.stopPropagation(); updateOrderStatus('${o.id}', 'completed')">Complete</button>
-            <button class="btn-secondary" onclick="event.stopPropagation(); updateOrderStatus('${o.id}', 'cancelled')">Cancel</button>
+            <button class="btn-primary" onclick="event.stopPropagation(); updateOrderStatus('${o.id}', 'completed')">完成</button>
+            <button class="btn-secondary" onclick="event.stopPropagation(); updateOrderStatus('${o.id}', 'cancelled')">取消</button>
           ` : ''}
         </div>
       </div>
@@ -441,20 +458,20 @@ function openOrderModal(orderId) {
         <div style="font-size:15px;font-weight:700">${order.id}</div>
         <div style="font-size:12px;color:#999">${formatDate(order.timestamp)}</div>
       </div>
-      <span class="order-status ${order.status}">${order.status}</span>
+      <span class="order-status ${order.status}">${STATUS_NAMES[order.status] || order.status}</span>
     </div>
     ${order.items.map(i => `
       <div class="order-detail-row">
         <div>
           <div class="order-detail-name">${i.name}</div>
-          <div class="order-detail-qty">${i.brand || ''} · Qty ${i.qty}</div>
+          <div class="order-detail-qty">${i.brand || ''} · 数量 ${i.qty}</div>
         </div>
         <div class="order-detail-price">$${(i.price * i.qty).toFixed(2)}</div>
       </div>
     `).join('')}
     <div class="order-detail-summary">
       <div class="order-detail-total-row">
-        <span class="order-detail-total-label">Total</span>
+        <span class="order-detail-total-label">合计</span>
         <span class="order-detail-total-value">$${order.total.toFixed(2)}</span>
       </div>
     </div>
@@ -463,13 +480,13 @@ function openOrderModal(orderId) {
   const footer = document.getElementById('order-modal-footer');
   if (order.status === 'pending') {
     footer.innerHTML = `
-      <button class="btn-secondary" onclick="updateOrderStatus('${order.id}', 'cancelled')">Cancel Order</button>
-      <button class="btn-primary" onclick="updateOrderStatus('${order.id}', 'completed')">Mark Complete</button>
+      <button class="btn-secondary" onclick="updateOrderStatus('${order.id}', 'cancelled')">取消订单</button>
+      <button class="btn-primary" onclick="updateOrderStatus('${order.id}', 'completed')">标记完成</button>
     `;
   } else {
     footer.innerHTML = `
-      <button class="btn-secondary" onclick="closeOrderModal()">Close</button>
-      ${order.status !== 'pending' ? `<button class="btn-primary" onclick="updateOrderStatus('${order.id}', 'pending')">Reopen</button>` : ''}
+      <button class="btn-secondary" onclick="closeOrderModal()">关闭</button>
+      ${order.status !== 'pending' ? `<button class="btn-primary" onclick="updateOrderStatus('${order.id}', 'pending')">重新打开</button>` : ''}
     `;
   }
 
@@ -488,7 +505,7 @@ function updateOrderStatus(orderId, status) {
   saveOrders();
   renderOrders();
   closeOrderModal();
-  showToast(`Order ${status}`);
+  showToast(`订单已${STATUS_NAMES[status] || status}`);
 }
 
 /* 更新订单徽章 */
@@ -523,10 +540,10 @@ function formatDate(iso) {
   const d = new Date(iso);
   const now = new Date();
   const diff = (now - d) / 1000;
-  if (diff < 60) return 'Just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} hr ago`;
-  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (diff < 60) return '刚刚';
+  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
+  return d.toLocaleDateString('zh-CN') + ' ' + d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 }
 
 let toastTimer = null;

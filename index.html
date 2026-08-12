@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Universal ID - Merchant Dashboard</title>
+<title>Universal ID - 商家后台</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,30 +18,30 @@
     <nav class="sidebar-nav">
       <button class="nav-item active" data-tab="dashboard">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="2" width="7" height="7" rx="1.5" fill="currentColor"/><rect x="11" y="2" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.5"/><rect x="2" y="11" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.5"/><rect x="11" y="11" width="7" height="7" rx="1.5" fill="currentColor"/></svg>
-        <span>Dashboard</span>
+        <span>仪表盘</span>
       </button>
       <button class="nav-item" data-tab="products">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 6l7-3 7 3v8l-7 3-7-3V6z" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M3 6l7 3 7-3M10 9v8" stroke="currentColor" stroke-width="1.5"/></svg>
-        <span>Products</span>
+        <span>商品管理</span>
       </button>
       <button class="nav-item" data-tab="orders">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 5h12l-1 8H5L4 5z" stroke="currentColor" stroke-width="1.5" fill="none"/><circle cx="7" cy="17" r="1.5" fill="currentColor"/><circle cx="13" cy="17" r="1.5" fill="currentColor"/><path d="M4 5l-1-2H1" stroke="currentColor" stroke-width="1.5"/></svg>
-        <span>Orders</span>
+        <span>订单管理</span>
         <span class="nav-badge" id="nav-order-badge" style="display:none">0</span>
       </button>
     </nav>
     <div class="sidebar-footer">
-      <a href="https://dongsion.github.io/Universal-ID/" class="view-store" target="_blank">View Store →</a>
+      <a href="https://dongsion.github.io/Universal-ID/" class="view-store" target="_blank">查看店铺 →</a>
     </div>
   </aside>
 
   <!-- 主内容区 -->
   <main class="main-content">
-    <!-- ====== Dashboard 仪表盘 ====== -->
+    <!-- ====== 仪表盘 ====== -->
     <section class="tab-content active" id="tab-dashboard">
       <div class="page-header">
-        <h1>Dashboard</h1>
-        <p class="page-sub">Overview of your store performance</p>
+        <h1>仪表盘</h1>
+        <p class="page-sub">店铺运营数据概览</p>
       </div>
       <div class="stats-grid" id="stats-grid">
         <!-- JS 注入统计卡片 -->
@@ -49,8 +49,8 @@
       <div class="dashboard-row">
         <div class="dash-panel">
           <div class="panel-header">
-            <h2>Low Stock Alert</h2>
-            <span class="panel-sub">Products needing restock</span>
+            <h2>库存预警</h2>
+            <span class="panel-sub">需要补货的商品</span>
           </div>
           <div class="panel-body" id="low-stock-list">
             <!-- JS 注入 -->
@@ -58,8 +58,8 @@
         </div>
         <div class="dash-panel">
           <div class="panel-header">
-            <h2>Recent Orders</h2>
-            <span class="panel-sub">Latest 5 orders</span>
+            <h2>最近订单</h2>
+            <span class="panel-sub">最新 5 笔订单</span>
           </div>
           <div class="panel-body" id="recent-orders-list">
             <!-- JS 注入 -->
@@ -68,28 +68,28 @@
       </div>
     </section>
 
-    <!-- ====== Products 商品管理 ====== -->
+    <!-- ====== 商品管理 ====== -->
     <section class="tab-content" id="tab-products">
       <div class="page-header">
         <div>
-          <h1>Products</h1>
-          <p class="page-sub">Manage your product catalog</p>
+          <h1>商品管理</h1>
+          <p class="page-sub">管理你的商品目录</p>
         </div>
         <button class="btn-primary" onclick="showProductForm()">
           <svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          Add Product
+          添加商品
         </button>
       </div>
       <div class="product-table-wrap">
         <table class="product-table" id="product-table">
           <thead>
             <tr>
-              <th>Product</th>
-              <th>Category</th>
-              <th>Price</th>
-              <th>Stock</th>
-              <th>Status</th>
-              <th>Actions</th>
+              <th>商品</th>
+              <th>分类</th>
+              <th>价格</th>
+              <th>库存</th>
+              <th>状态</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody id="product-tbody">
@@ -99,17 +99,17 @@
       </div>
     </section>
 
-    <!-- ====== Orders 订单管理 ====== -->
+    <!-- ====== 订单管理 ====== -->
     <section class="tab-content" id="tab-orders">
       <div class="page-header">
-        <h1>Orders</h1>
-        <p class="page-sub">View and manage customer orders</p>
+        <h1>订单管理</h1>
+        <p class="page-sub">查看和处理顾客订单</p>
       </div>
       <div class="order-filters">
-        <button class="filter-tab active" data-filter="all">All</button>
-        <button class="filter-tab" data-filter="pending">Pending</button>
-        <button class="filter-tab" data-filter="completed">Completed</button>
-        <button class="filter-tab" data-filter="cancelled">Cancelled</button>
+        <button class="filter-tab active" data-filter="all">全部</button>
+        <button class="filter-tab" data-filter="pending">待处理</button>
+        <button class="filter-tab" data-filter="completed">已完成</button>
+        <button class="filter-tab" data-filter="cancelled">已取消</button>
       </div>
       <div class="order-list" id="order-list">
         <!-- JS 注入 -->
@@ -121,51 +121,51 @@
   <div class="modal-overlay" id="product-modal">
     <div class="modal">
       <div class="modal-header">
-        <h2 id="modal-title">Add Product</h2>
+        <h2 id="modal-title">添加商品</h2>
         <button class="modal-close" onclick="closeProductForm()">✕</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label>Product Image</label>
+          <label>商品图片</label>
           <div class="img-upload" id="img-upload" onclick="document.getElementById('m-image').click()">
             <div class="img-placeholder" id="m-img-placeholder">
               <svg width="28" height="28" viewBox="0 0 28 28"><path d="M14 6v16M6 14h16" stroke="#bbb" stroke-width="2" stroke-linecap="round"/></svg>
-              <span>Upload Image</span>
+              <span>上传图片</span>
             </div>
             <img class="img-preview" id="m-img-preview" style="display:none">
           </div>
           <input type="file" id="m-image" accept="image/*" style="display:none">
         </div>
         <div class="form-group">
-          <label>Product Name</label>
-          <input type="text" id="m-name" placeholder="e.g. Coconut Chips" maxlength="30">
+          <label>商品名称</label>
+          <input type="text" id="m-name" placeholder="例如：椰子脆片" maxlength="30">
         </div>
         <div class="form-group">
-          <label>Brand</label>
-          <input type="text" id="m-brand" placeholder="e.g. Dang" maxlength="20">
+          <label>品牌</label>
+          <input type="text" id="m-brand" placeholder="例如：Dang" maxlength="20">
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>Price ($)</label>
+            <label>价格 ($)</label>
             <input type="number" id="m-price" placeholder="6.00" min="0" step="0.01">
           </div>
           <div class="form-group">
-            <label>Stock</label>
+            <label>库存</label>
             <input type="number" id="m-stock" placeholder="100" min="0" step="1">
           </div>
         </div>
         <div class="form-group">
-          <label>Category</label>
+          <label>分类</label>
           <select id="m-category">
-            <option value="Chips">Chips</option>
-            <option value="Choco">Choco</option>
-            <option value="Drinks">Drinks</option>
-            <option value="Cookies">Cookies</option>
-            <option value="Nuts">Nuts</option>
+            <option value="Chips">薯片</option>
+            <option value="Choco">巧克力</option>
+            <option value="Drinks">饮料</option>
+            <option value="Cookies">饼干</option>
+            <option value="Nuts">坚果</option>
           </select>
         </div>
         <div class="form-group">
-          <label>Card Background Color</label>
+          <label>卡片背景色</label>
           <div class="color-picker" id="m-color-picker">
             <div class="color-opt selected" data-color="#FFF3D6" style="background:#FFF3D6"></div>
             <div class="color-opt" data-color="#D6F5E0" style="background:#D6F5E0"></div>
@@ -179,8 +179,8 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn-secondary" onclick="closeProductForm()">Cancel</button>
-        <button class="btn-primary" id="m-save-btn" onclick="saveProductForm()">Save Product</button>
+        <button class="btn-secondary" onclick="closeProductForm()">取消</button>
+        <button class="btn-primary" id="m-save-btn" onclick="saveProductForm()">保存商品</button>
       </div>
     </div>
   </div>
@@ -189,7 +189,7 @@
   <div class="modal-overlay" id="order-modal">
     <div class="modal modal-narrow">
       <div class="modal-header">
-        <h2>Order Details</h2>
+        <h2>订单详情</h2>
         <button class="modal-close" onclick="closeOrderModal()">✕</button>
       </div>
       <div class="modal-body" id="order-modal-body">
