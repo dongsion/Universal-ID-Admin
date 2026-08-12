@@ -1,2 +1,31 @@
-# Universal-ID-Admin
-Merchant dashboard for Universal ID snacks store
+# Universal ID - Merchant Dashboard
+
+Merchant admin panel for the Universal ID snacks store.
+
+## Features
+
+### Dashboard
+- Total products, stock value, order count, revenue stats
+- Low stock alerts with one-click restock
+- Recent orders overview
+
+### Product Management
+- Table view with inline stock adjustment (+/-)
+- Add/edit/delete products with image upload
+- Category, price, stock, and card color management
+- Status badges (In Stock / Low Stock / Out of Stock)
+
+### Order Management
+- Filter by status (All / Pending / Completed / Cancelled)
+- Order detail modal with item breakdown
+- Mark orders complete or cancelled
+- Auto-syncs with customer app every 5 seconds
+
+## Data Sync
+Shares localStorage with the customer app (`Universal-ID` repo). Both apps must be deployed under the same domain (e.g. `*.github.io`) for data to sync.
+
+## Related
+- Customer app: [Universal-ID](https://github.com/dongsion/Universal-ID)
+
+## License
+MIT
