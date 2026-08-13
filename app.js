@@ -29,6 +29,10 @@ let uploadedImage = null;
 let selectedColor = '#FFF3D6';
 let orderFilter = 'all';
 
+/* ---- 聊天状态 ---- */
+let chatConversations = {};  // { sessionId: { messages: [], unread: 0, lastTime: '' } }
+let chatActiveSession = null;
+
 /* ---- DOM ---- */
 const productTbody = document.getElementById('product-tbody');
 const orderList = document.getElementById('order-list');
@@ -39,6 +43,9 @@ const navOrderBadge = document.getElementById('nav-order-badge');
 const productModal = document.getElementById('product-modal');
 const orderModal = document.getElementById('order-modal');
 const toast = document.getElementById('m-toast');
+const chatNavBadge = document.getElementById('chat-nav-badge');
+const chatConvList = document.getElementById('chat-conv-list');
+const chatWindow = document.getElementById('chat-window');
 
 /* ---- API 请求封装 ---- */
 async function api(path, options = {}) {
@@ -82,7 +89,11 @@ function connectWS() {
   try {
     ws = new WebSocket(WS_URL);
 
-    ws.onopen = () => console.log('商家端 WebSocket 已连接');
+    ws.onopen = () => {
+      console.log('商家端 WebSocket 已连接');
+      ws.send(JSON.stringify({ type: 'chat_register', data: { role: 'merchant' } }));
+      ws.send(JSON.stringify({ type: 'chat_get_conversations' }));
+    };
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
@@ -134,6 +145,45 @@ function handleWSMessage(msg) {
     if (activeTab === 'dashboard') renderDashboard();
     if (activeTab === 'orders') renderOrders();
     updateOrderBadge();
+  } else if (type === 'chat_message') {
+    // 收到客户消息
+    const sid = data.sessionId;
+    if (!chatConversations[sid]) {
+      chatConversations[sid] = { messages: [], unread: 0, lastTime: '' };
+    }
+    chatConversations[sid].messages.push({
+      from: data.from || 'customer',
+      text: data.text,
+      timestamp: data.timestamp || new Date().toISOString(),
+    });
+    chatConversations[sid].lastTime = data.timestamp || new Date().toISOString();
+    if (chatActiveSession !== sid) {
+      chatConversations[sid].unread++;
+    }
+    updateChatNavBadge();
+    const activeTab = document.querySelector('.nav-item.active')?.dataset.tab;
+    if (activeTab === 'chat') renderChatTab();
+    showToast(`新消息：${data.text.substring(0, 30)}`);
+  } else if (type === 'chat_conversations') {
+    // 收到会话列表
+    if (data.conversations) {
+      data.conversations.forEach(conv => {
+        if (!chatConversations[conv.sessionId]) {
+          chatConversations[conv.sessionId] = { messages: conv.messages || [], unread: 0, lastTime: conv.lastTime || '' };
+        } else {
+          conv.messages.forEach(m => {
+            const exists = chatConversations[conv.sessionId].messages.find(
+              existing => existing.timestamp === m.timestamp && existing.text === m.text
+            );
+            if (!exists) chatConversations[conv.sessionId].messages.push(m);
+          });
+          if (conv.lastTime) chatConversations[conv.sessionId].lastTime = conv.lastTime;
+        }
+      });
+      updateChatNavBadge();
+      const activeTab = document.querySelector('.nav-item.active')?.dataset.tab;
+      if (activeTab === 'chat') renderChatTab();
+    }
   }
 }
 
@@ -151,6 +201,7 @@ document.querySelectorAll('.nav-item').forEach(item => {
     if (tab === 'dashboard') renderDashboard();
     if (tab === 'products') renderProductTable();
     if (tab === 'orders') renderOrders();
+    if (tab === 'chat') renderChatTab();
   });
 });
 
@@ -704,6 +755,197 @@ productModal.addEventListener('click', function(e) {
 orderModal.addEventListener('click', function(e) {
   if (e.target === this) closeOrderModal();
 });
+
+/* ========================================
+   ===== 聊天功能 =====
+   ======================================== */
+
+function escapeHtmlAdmin(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function formatChatTime(timestamp) {
+  const d = new Date(timestamp);
+  const now = new Date();
+  const diff = (now - d) / 1000;
+  if (diff < 60) return '刚刚';
+  if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`;
+  return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+}
+
+function formatMsgTime(timestamp) {
+  return new Date(timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+}
+
+/* 更新导航栏未读徽章 */
+function updateChatNavBadge() {
+  const totalUnread = Object.values(chatConversations).reduce((s, c) => s + (c.unread || 0), 0);
+  if (totalUnread > 0) {
+    chatNavBadge.textContent = totalUnread > 99 ? '99+' : totalUnread;
+    chatNavBadge.style.display = 'flex';
+  } else {
+    chatNavBadge.style.display = 'none';
+  }
+}
+
+/* 渲染聊天页面 */
+function renderChatTab() {
+  renderConvList();
+  renderChatWindow();
+}
+
+/* 渲染会话列表 */
+function renderConvList() {
+  const sessions = Object.entries(chatConversations).sort((a, b) => {
+    const timeA = a[1].lastTime ? new Date(a[1].lastTime).getTime() : 0;
+    const timeB = b[1].lastTime ? new Date(b[1].lastTime).getTime() : 0;
+    return timeB - timeA;
+  });
+
+  if (sessions.length === 0) {
+    chatConvList.innerHTML = `
+      <div class="chat-conv-empty">
+        <div class="chat-conv-empty-icon">💬</div>
+        <div class="chat-conv-empty-text">暂无消息</div>
+        <div class="chat-conv-empty-sub">客户的消息会显示在这里</div>
+      </div>
+    `;
+    return;
+  }
+
+  chatConvList.innerHTML = sessions.map(([sid, conv]) => {
+    const lastMsg = conv.messages[conv.messages.length - 1] || {};
+    const isActive = chatActiveSession === sid;
+    const shortId = sid.replace('cust_', '').substring(0, 8);
+    return `
+      <div class="chat-conv-item ${isActive ? 'active' : ''}" onclick="selectConversation('${sid}')">
+        <div class="chat-conv-avatar">${shortId.charAt(0).toUpperCase()}</div>
+        <div class="chat-conv-info">
+          <div class="chat-conv-top">
+            <span class="chat-conv-name">客户 ${shortId}</span>
+            <span class="chat-conv-time">${conv.lastTime ? formatChatTime(conv.lastTime) : ''}</span>
+          </div>
+          <div class="chat-conv-preview">${escapeHtmlAdmin(lastMsg.text || '暂无消息')}</div>
+        </div>
+        ${conv.unread > 0 ? `<span class="chat-conv-unread">${conv.unread > 99 ? '99+' : conv.unread}</span>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+/* 渲染聊天窗口 */
+function renderChatWindow() {
+  if (!chatActiveSession || !chatConversations[chatActiveSession]) {
+    chatWindow.innerHTML = `
+      <div class="chat-win-empty">
+        <div class="chat-win-empty-icon">💬</div>
+        <div class="chat-win-empty-text">选择一个会话开始对话</div>
+        <div class="chat-win-empty-sub">点击左侧的客户会话查看消息</div>
+      </div>
+    `;
+    return;
+  }
+
+  const conv = chatConversations[chatActiveSession];
+  const shortId = chatActiveSession.replace('cust_', '').substring(0, 8);
+
+  chatWindow.innerHTML = `
+    <div class="chat-win-header">
+      <div class="chat-conv-avatar">${shortId.charAt(0).toUpperCase()}</div>
+      <div class="chat-win-header-info">
+        <div class="chat-win-header-name">客户 ${shortId}</div>
+        <div class="chat-win-header-status">在线</div>
+      </div>
+    </div>
+    <div class="chat-win-messages" id="chat-win-msgs">
+      ${conv.messages.length === 0 ? `
+        <div class="chat-win-empty">
+          <div class="chat-win-empty-icon">📝</div>
+          <div class="chat-win-empty-text">暂无消息</div>
+          <div class="chat-win-empty-sub">向客户发送一条消息开始对话</div>
+        </div>
+      ` : conv.messages.map(msg => {
+        const isSent = msg.from === 'merchant';
+        return `
+          <div class="chat-bubble ${isSent ? 'sent' : 'received'}">
+            ${escapeHtmlAdmin(msg.text)}
+            <div class="chat-bubble-time">${formatMsgTime(msg.timestamp)}</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+    <div class="chat-win-input">
+      <input type="text" id="chat-reply-input" placeholder="输入回复消息..." maxlength="500"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();sendChatReply();}">
+      <button class="chat-win-send-btn" onclick="sendChatReply()">发送</button>
+    </div>
+  `;
+
+  // 滚动到底部
+  const msgsEl = document.getElementById('chat-win-msgs');
+  if (msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight;
+}
+
+/* 选择会话 */
+function selectConversation(sid) {
+  chatActiveSession = sid;
+  if (chatConversations[sid]) {
+    chatConversations[sid].unread = 0;
+  }
+  updateChatNavBadge();
+  renderChatTab();
+  setTimeout(() => {
+    const input = document.getElementById('chat-reply-input');
+    if (input) input.focus();
+  }, 100);
+}
+
+/* 商家发送回复 */
+function sendChatReply() {
+  const input = document.getElementById('chat-reply-input');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text || !chatActiveSession) return;
+
+  const msg = {
+    from: 'merchant',
+    text: text,
+    timestamp: new Date().toISOString(),
+  };
+
+  if (!chatConversations[chatActiveSession]) {
+    chatConversations[chatActiveSession] = { messages: [], unread: 0, lastTime: '' };
+  }
+  chatConversations[chatActiveSession].messages.push(msg);
+  chatConversations[chatActiveSession].lastTime = msg.timestamp;
+
+  // 通过 WebSocket 发送
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'chat_reply',
+      data: {
+        sessionId: chatActiveSession,
+        text: text,
+        timestamp: msg.timestamp,
+      }
+    }));
+  } else {
+    // API 回退
+    api('/chat/reply', {
+      method: 'POST',
+      body: JSON.stringify({
+        sessionId: chatActiveSession,
+        text: text,
+      })
+    });
+  }
+
+  input.value = '';
+  renderChatTab();
+}
 
 /* ========================================
    登录
